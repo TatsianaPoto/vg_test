@@ -2,6 +2,7 @@
 
 Я очень подробно во второй задаче расписала что в файле, исходя из этого, запрос:
 
+~~~sql
 SELECT
   previous_date(date),
   i.install_date,
@@ -33,3 +34,4 @@ FROM
     FROM
       spend_2022
   ) spend_2021 ON i.install_date = spend_2021.spend_date AND i.platform = spend_2021.platform AND i.partner = spend_2021.partner AND i.country = spend_2021.country;
+~~~

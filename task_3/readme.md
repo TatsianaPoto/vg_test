@@ -90,3 +90,78 @@ ORDER BY
 
 Таким образом, результатом будет таблица с полями install_date, platform, is_paid, cohort_day и acc_revenue, 
 где acc_revenue представляет собой аккумулированную сумму платежей для каждой когорты в разрезе install_date, platform и is_paid.
+
+
+Фидбек от заказчика: 
+Сумма должна считаться относительно когортных дней (cohort_day), а не даты платежа. 
+Запрос выведет дублирующуюся атрибуцию, нужно добавить DISTINCT. Дефолтное RANGE-окно уместнее в контексте задачи нежели ROWS-окно.
+
+Я согласна с данным замечанием, исправленный запрос будет выглядить так:
+
+~~~sql
+WITH cohort_data AS (
+    SELECT
+        u.install_time AS install_date,
+        u.platform,
+        u.is_paid,
+        p.payment_time AS cohort_day,
+        SUM(p.revenue) OVER (PARTITION BY u.install_time, u.platform, u.is_paid ORDER BY p.payment_time) AS acc_revenue
+    FROM
+        users u
+    LEFT JOIN
+        payments p ON u.user_id = p.user_id
+)
+SELECT DISTINCT
+    install_date,
+    platform,
+    is_paid,
+    cohort_day,
+    FIRST_VALUE(acc_revenue) OVER (PARTITION BY install_date, platform, is_paid ORDER BY cohort_day) AS acc_revenue
+FROM
+    cohort_data
+ORDER BY
+    install_date, platform, is_paid, cohort_day;
+~~~
+
+В этом запросе я изменила оконную функцию для рассчета аккумулированной суммы платежей. 
+Теперь я использую оконную функцию FIRST_VALUE для получения аккумулированной суммы платежей для каждого когортного дня, а не для каждого платежа. 
+Также добавила DISTINCT, чтобы исключить дублирование строк в результате запроса. 
+Изменила RANGE на ROWS, так как ROWS более подходит для данной задачи.
+
+Также я согласна с тем, что во второй части я использовала оконную функцию, по невнимательности вставила не тот запрос(
+
+Исправленный запрос без оконной функции будет выглядить так:
+
+~~~sql
+SELECT
+    u.install_time AS install_date,
+    u.platform,
+    u.is_paid,
+    p.payment_time AS cohort_day,
+    SUM(p.revenue) AS acc_revenue
+FROM
+    users u
+LEFT JOIN
+    payments p ON u.user_id = p.user_id
+WHERE
+    p.payment_time BETWEEN u.install_time AND datetime(u.install_time, '+1 day')
+GROUP BY
+    u.install_time,
+    u.platform,
+    u.is_paid,
+    p.payment_time
+ORDER BY
+    u.install_time,
+    u.platform,
+    u.is_paid,
+    p.payment_time;
+~~~
+
+В этом запросе я использую подзапрос для расчета аккумулированной суммы платежей.
+Объединяю таблицы users и payments по user_id и фильтруем платежи, чтобы они находились в интервале [install_time; install_time + 1 day), 
+соответствующем когортному дню. Затем мы группируем результат по install_time, platform, is_paid и payment_time, 
+чтобы получить сумму платежей для каждого когортного дня.
+
+
+
+
